@@ -1,6 +1,8 @@
 #define tempPin A1;
 #define voltageSensor A0;
 #define voltageModify 9;
+const float R1 = 10000.0; 
+const float R2 = 6800.0; 
 
 void setup() {
   Serial.begin(9600);
@@ -11,7 +13,7 @@ void setup() {
 
 float G = 1000.0; // will be adding a function soon to obtain this from a radfet
 
-float obtain_temp {
+obtain_temp() {
   int reading = analogRead(tempPin);
   float voltage = reading * (5000/1024.0);
   float T_celsius = (voltage-500)/10;
@@ -25,6 +27,7 @@ float K_v = -0.08;
 float K_i = 0.065;
 float K = 0.5;
 int NOCT = 47;
+int N_p = 50;
 int N_s = 49;
 float R_s = 0.5;
 float R_sh = 200.0;
@@ -39,7 +42,12 @@ float I = 0.0;
 
 calculate_vt(float T_kelvin) {
   float V_t = (k * T_kelvin) / q;
-  return V_t
+  return V_t;
+}
+
+calculate_voc(float I_ph, float I_s, float V_t){
+  float V_oc = std::log(I_ph/I_s) * V_t;
+  return V_oc;
 }
 
 calculate_irs(float T_kelvin, float I_sc, float q, float n, float K) {
@@ -53,60 +61,70 @@ calculate_is(float I_rs, float T_kelvin) {
   return I_rs * pow(T_kelvin / T_ref, 3) * exp(exponent);
 }
 
-calculate_iph(float G, float T_kelvin, float T_ref_kelvin) {
+calculate_iph(float G, float T_kelvin, float T_ref_kelvin, float I_sc, float K_i) {
   float I_ph = G * (I_sc + K_i*(T_kelvin - T_ref_kelvin));
   return I_ph
 }
 
 calculate_id(float I_s, float V_t, float V, float I) {
   float exp_arg = (V + I * R_s) / (n * V_t * N_s);
-  return I_s * (exp(exp_arg) - 1.0) * N_p;
+  float I_d = I_s * (exp(exp_arg) - 1.0) * N_p;
+  return I_d;
 }
 
 calculate_ish(float V, float I) {
-  return (V + I * R_s) / R_sh;
+  float I_sh = (V + I * R_s) / R_sh;
+  return I_sh;
 }
 
-calculate_current(float V_input) {
-  float T_kelvin = T + 273.15;
-  float V_t = calculate_vt(T_kelvin);
-  float I_rs = calculate_irs(T_kelvin);
-  float I_s = calculate_is(I_rs, T_kelvin);
-  float I_ph = calculate_iph(G, T);
+float T_op = obtain_temp();
+float V_t = calculate_vt(T_op);
+float I_ph = calculate_iph(G, T_op, T_ref_kelvin, I_sc,  K_i);
+float V_oc = 25.0;
+float I_rs = calculate_irs(I_sc, V_oc, q, n, k, T_op);
+float I_s = calculate_is(I_rs, T_op);
+float V_oc = calculate_voc(I_ph, I_s, V_t);
 
-  float I_est = I_ph;
-  for (int i = 0; i < 10; i++) {
-    float I_d = calculate_id(I_s, V_t, V_input, I_est);
-    float I_sh = calculate_ish(V_input, I_est);
-    float I_new = I_ph * N_p - I_d - I_sh;
-    if (abs(I_new - I_est) < 1e-5) break;
-    I_est = I_new;
-  }
-  return I_est;
+calculate_current(float I_ph, float N_p, float I_d, float I_sh) {
+  float I = I_ph * N_p - I_d - I_sh;
+  return I;
 }
+
+float I = 0.0;
 
 void setup() {
   Serial.begin(9600);
+  str input = "Hello";
 }
 
 void loop() {
-  if (Serial.available()) {
-    inputString = Serial.readStringUntil('\n');
-    int commaIndex = inputString.indexOf(',');
-    if (commaIndex > 0) {
-      String gString = inputString.substring(0, commaIndex);
-      String tString = inputString.substring(commaIndex + 1);
-      G = gString.toFloat();
-      T = tString.toFloat();
-    }
+  while Serial.available() == 0 {
   }
 
-  V = analogRead(A0) * (5.0 / 1023.0);
-  I = calculate_current(V);
+  if Serial.readString() == input {
+    float T_op = obtain_temp();
+    float V_t = calculate_vt(T_op);
+    float I_ph = calculate_iph(G, T_op, T_ref_kelvin, I_sc,  K_i);
+    float V_oc = 25.0;
+    float I_rs = calculate_irs(I_sc, V_oc, q, n, k, T_op);
+    float I_s = calculate_is(I_rs, T_op);
+    float V_oc = calculate_voc(I_ph, I_s, V_t);
 
-  Serial.print(V, 3);
-  Serial.print(",");
-  Serial.println(I, 3);
+    for (int i = 0; i <= V_oc; i++) {
+      float I_sh = calculate_ish(i, I);
+      float I = calculate_current(I_ph, N_p, I_d, I_sh);
+      Serial.print(i);
+      Serial.print(",");
+      Serial.print(I);
 
-  delay(200);
+      analogWrite(pin, 255);
+      int sensorValue = analogRead(A0);
+      float voltageAtPin = sensorValue * (5.0 / 1023.0); // voltage at A0
+      float batteryVoltage = voltageAtPin * ((R1 + R2) / R2); // undo the divider
+      Serial.print("Battery Voltage: ");
+      Serial.print(batteryVoltage);
+      Serial.println(" V");
+      delay(1000);
+    }
+  }
 }
