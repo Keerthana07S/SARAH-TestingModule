@@ -1,3 +1,5 @@
+## This code was partly referenced from pafloxy and Dr. David Layden's research. MIT License is attached separately.
+
 import numpy as np
 from typing import Optional, Union, List, Tuple
 from tqdm import tqdm
