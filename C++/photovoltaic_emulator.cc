@@ -1,52 +1,73 @@
-String inputString = "";
-float G = 1000.0;
-float T = 25.0;
+#define tempPin A1;
+#define voltageSensor A0;
+#define voltageModify 9;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(tempPin, INPUT);
+  pinMode(voltageSensor, INPUT);
+  pinMode(voltageModify, OUTPUT);
+}
+
+float G = 1000.0; // will be adding a function soon to obtain this from a radfet
+
+float obtain_temp {
+  int reading = analogRead(tempPin);
+  float voltage = reading * (5000/1024.0);
+  float T_celsius = (voltage-500)/10;
+  float T_kelvin = T_celsius + 273.15;
+  return T_kelvin;
+}
 
 float I_sc = 0.683;
-float V_oc = 25.0;
-float K_v = -0.07;
-float K_i = 0.08;
+int P_mpp = 12;
+float K_v = -0.08;
+float K_i = 0.065;
+float K = 0.5;
+int NOCT = 47;
 int N_s = 49;
 float R_s = 0.5;
 float R_sh = 200.0;
 float n = 1.3;
 float q = 1.602e-19;
-float k = 1.381e-23;
-float T_ref = 298.15;
+float T_ref_kelvin = 298.15;
 float E_g = 1.1;
 float N_p = 1.0;
 
 float V = 0.0;
 float I = 0.0;
 
-float calculate_vt(float T_kelvin) {
-  return (k * T_kelvin) / q;
+calculate_vt(float T_kelvin) {
+  float V_t = (k * T_kelvin) / q;
+  return V_t
 }
 
-float calculate_irs(float T_kelvin) {
+calculate_irs(float T_kelvin, float I_sc, float q, float n, float K) {
   float denom = exp((q * V_oc) / (n * k * T_kelvin)) - 1.0;
-  return I_sc / denom;
+  float I_rs = I_sc / denom;
+  return I_rs;
 }
 
-float calculate_is(float I_rs, float T_kelvin) {
+calculate_is(float I_rs, float T_kelvin) {
   float exponent = (-q * E_g / (n * k)) * ((1.0 / T_kelvin) - (1.0 / T_ref));
   return I_rs * pow(T_kelvin / T_ref, 3) * exp(exponent);
 }
 
-float calculate_iph(float G, float T_C) {
-  return G * (I_sc + K_i * (T_C - (T_ref - 273.15)));
+calculate_iph(float G, float T_kelvin, float T_ref_kelvin) {
+  float I_ph = G * (I_sc + K_i*(T_kelvin - T_ref_kelvin));
+  return I_ph
 }
 
-float calculate_id(float I_s, float V_t, float V, float I) {
+calculate_id(float I_s, float V_t, float V, float I) {
   float exp_arg = (V + I * R_s) / (n * V_t * N_s);
   return I_s * (exp(exp_arg) - 1.0) * N_p;
 }
 
-float calculate_ish(float V, float I) {
+calculate_ish(float V, float I) {
   return (V + I * R_s) / R_sh;
 }
 
-float calculate_current(float V_input) {
+calculate_current(float V_input) {
   float T_kelvin = T + 273.15;
   float V_t = calculate_vt(T_kelvin);
   float I_rs = calculate_irs(T_kelvin);
