@@ -1,4 +1,4 @@
-## This code was partly referenced from pafloxy and Dr. David Layden's research. MIT License is attached separately.
+## This code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
 
 import numpy as np
 from typing import Optional, Union, List, Tuple
