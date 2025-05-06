@@ -1,7 +1,7 @@
 #define tempPin A1;
 #define voltageSensor A0;
 #define voltageModify 9;
-const float R1 = 10000.0; 
+const float R1 = 10000.0;
 const float R2 = 6800.0; 
 
 void setup() {
