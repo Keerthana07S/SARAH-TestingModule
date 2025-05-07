@@ -56,18 +56,18 @@ float calculate_vt(float T_kelvin) {
 }
 
 float calculate_voc(float I_ph, float I_s, float V_t){
-  float V_oc = std::log(I_ph/I_s) * V_t;
+  float V_oc = log(I_ph/I_s) * V_t;
   return V_oc;
 }
 
 float calculate_irs(float T_kelvin, float I_sc, float q, float n, float K) {
-  float denom = exp((q * V_oc) / (n * k * T_kelvin)) - 1.0;
+  float denom = exp((q * V_oc) / (n * K * T_kelvin)) - 1.0;
   float I_rs = I_sc / denom;
   return I_rs;
 }
 
 float calculate_is(float I_rs, float T_kelvin) {
-  float exponent = (-q * E_g / (n * k)) * ((1.0 / T_kelvin) - (1.0 / T_ref));
+  float exponent = (-q * E_g / (n * K)) * ((1.0 / T_kelvin) - (1.0 / T_ref));
   return I_rs * pow(T_kelvin / T_ref, 3) * exp(exponent);
 }
 
