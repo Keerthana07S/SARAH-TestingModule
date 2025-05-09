@@ -44,6 +44,7 @@ void setup() {
 }
 
 void loop() {
+  float V_oc = log(()/()) * ((k*)/())
   float V = readVoltage();     //terminal voltage
   float I_loss = readCurrent();  //measured current (e.g., losses)
 
