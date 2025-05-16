@@ -218,10 +218,11 @@ temperature = 1
 gamma_range = (0.2, 0.6)
 delta_time = 0.8
 
-J = np.random.uniform(-2, 2, size=(num_spins, num_spins))
+J = np.random.uniform(0, 1, size=(num_spins, num_spins))
 J = 0.5 * (J + J.T)
-J = np.round(J - np.diag(np.diag(J)), 3)
-h = np.round(0.5 * np.random.randn(num_spins), 2)
+np.fill_diagonal(J, 0)
+J = np.round(J, 2)
+h = np.round(np.random.uniform(-1.5, 1.5, size=num_spins), 2)
 
 model = IsingEnergyFunction(J, h)
 
