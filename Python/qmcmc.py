@@ -1,4 +1,5 @@
-## This code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
+## Some of this code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
+## Moreover, new additions to the prior code were included so that up to 200 nodes can be searched using a classical computer.
 
 import numpy as np
 from typing import Optional, Union, List, Tuple
