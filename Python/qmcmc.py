@@ -1,5 +1,6 @@
-## Some of this code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
-## Moreover, new additions to the prior code were included so that up to 200 nodes can be searched using a classical computer.
+# Some of this code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
+# Moreover, new additions to the prior code were included so that up to 200 nodes can be searched using a classical computer.
+# Note that the library "quMCMC" was obtained from pafloxy's Github and should be in a separate folder when running this code. 
 
 import numpy as np
 from typing import Optional, Union, List, Tuple
