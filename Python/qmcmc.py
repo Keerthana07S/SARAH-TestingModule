@@ -1,246 +1,138 @@
 # Some of this code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
-# Moreover, new additions to the prior code were included so that up to 200 nodes can be searched using a classical computer.
+# Moreover, many additions and modifications to the prior code were made so that up to 200 nodes can be searched using a classical computer.
 # Note that the library "quMCMC" was obtained from pafloxy's Github and should be in a separate folder when running this code. 
-
 import numpy as np
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union
+from collections import Counter, defaultdict
 from tqdm import tqdm
-from collections import Counter
-from quMCMC.qumcmc.basic_utils import states, MCMCChain, MCMCState
+import time
 
+from quMCMC.qumcmc.basic_utils import MCMCChain, MCMCState
 from quMCMC.qumcmc.energy_models import IsingEnergyFunction
 from quMCMC.qumcmc.classical_mcmc_routines import test_accept, get_random_state
-
-from qulacs import QuantumState, QuantumCircuit
-from qulacsvis import circuit_drawer
-from scipy.linalg import expm
-from qulacs.gate import DenseMatrix
-from qulacs.gate import X, Y, Z, Pauli, Identity, merge
-
-from itertools import combinations
-import random
-
 from quMCMC.qumcmc.mixers import CustomMixer
+from qulacs import QuantumState, QuantumCircuit
 
-GammaType = Union[float, Tuple[float, float]]
+GammaType = Union[float, tuple]
 
 def initialise_qc(n_spins: int, bitstring: str) -> QuantumCircuit:
-    """
-    Initialises a quantum circuit with n_spins number of qubits in a state defined by "bitstring"
-    """
-    qc_in = QuantumCircuit(qubit_count=n_spins)
-    len_str_in = len(bitstring)
-    assert (
-        len_str_in == qc_in.get_qubit_count()
-    ), "len(bitstring) should be equal to number_of_qubits/spins"
-
-    for i in range(0, len(bitstring)):
-        if bitstring[i] == "1":
-            qc_in.add_X_gate(len_str_in - 1 - i)
+    qc_in = QuantumCircuit(n_spins)
+    for i, b in enumerate(reversed(bitstring)):
+        if b == "1":
+            qc_in.add_X_gate(i)
     return qc_in
 
-
-def fn_qckt_problem_half(
-    J: np.array, h, num_spins: int, gamma: float, alpha: float, delta_time=0.8
-) -> QuantumCircuit:
-    """
-    Create a quantum circuit for time evolution under scaled problem hamiltonian
-    h1 = (1-gamma) * alpha * H_prob
-    where H_prob=sum_{j=1}^{n}[-(h_j*Z_j)] + sum_{j>k=1}^{n} [-J_{ij} * Z_{j} * Z_{k}]
-    """
-    qc_problem_hamiltonian_half = QuantumCircuit(num_spins)
-
-    avg_interactions = (np.mean(np.abs(h)), np.mean(np.abs(J)))
-    epsilon = 10 ** (-3)
-    if avg_interactions[0] <= epsilon and avg_interactions[1] <= epsilon:
-        return qc_problem_hamiltonian_half
-
-    pauli_z_index = [3, 3] 
-    theta_array_2qubit = (2 * -1 * (1 - gamma) * alpha * delta_time) * J  #
-    for j in range(0, num_spins - 1):
+def fn_qckt_problem_half(J: np.ndarray, h: np.ndarray, num_spins: int, gamma: float, alpha: float, delta_time=0.8) -> QuantumCircuit:
+    qc = QuantumCircuit(num_spins)
+    theta_J = 2 * -1 * (1 - gamma) * alpha * delta_time * J
+    for j in range(num_spins - 1):
         for k in range(j + 1, num_spins):
-            target_qubit_list = [num_spins - 1 - j, num_spins - 1 - k]
-            angle = (
-                -1 * theta_array_2qubit[j, k]
-            ) 
-            qc_problem_hamiltonian_half.add_multi_Pauli_rotation_gate(
-                index_list=target_qubit_list, pauli_ids=pauli_z_index, angle=angle
-            )
-    theta_array_1qubit = (2 * -1 * (1 - gamma) * alpha * delta_time) * np.array(h)
+            angle = -theta_J[j, k]
+            if angle != 0:
+                qc.add_multi_Pauli_rotation_gate([num_spins - 1 - j, num_spins - 1 - k], [3, 3], angle)
+    theta_h = 2 * -1 * (1 - gamma) * alpha * delta_time * h
+    for j in range(num_spins):
+        angle = -theta_h[j]
+        if angle != 0:
+            qc.add_RZ_gate(num_spins - 1 - j, angle)
+    return qc
 
-    for j in range(0, num_spins):
-        target_qubit = num_spins - 1 - j
-        angle = -1 * theta_array_1qubit[j]
-        qc_problem_hamiltonian_half.add_RZ_gate(index=target_qubit, angle=angle)
+def trotter(num_spins: int, qckt_1: QuantumCircuit, qckt_2: QuantumCircuit, num_trotter_steps: int) -> QuantumCircuit:
+    qc = QuantumCircuit(num_spins)
+    for _ in range(num_trotter_steps - 1):
+        qc.merge_circuit(qckt_2)
+        qc.merge_circuit(qckt_1)
+    qc.merge_circuit(qckt_2)
+    return qc
 
-    return qc_problem_hamiltonian_half
+def run_batch_qmcmc(bit_init: str, Jsub: np.ndarray, hsub: np.ndarray, n_hops: int, gamma: GammaType, temperature: float, delta_time: float) -> Counter:
+    num_spins = len(hsub)
+    model = IsingEnergyFunction(Jsub, hsub)
+    mixer = CustomMixer(num_spins, [(i, i + 1) for i in range(num_spins - 1)])
+    gammafunc = (lambda: gamma) if isinstance(gamma, (int, float)) else (lambda: np.random.uniform(*gamma))
 
-def trotter(
-    num_spins: int,
-    qckt_1: QuantumCircuit,
-    qckt_2: QuantumCircuit,
-    num_trotter_steps: int,
-) -> QuantumCircuit:
-    qc_combine = QuantumCircuit(num_spins)
-    for _ in range(0, num_trotter_steps - 1):
-        qc_combine.merge_circuit(qckt_2)
-        qc_combine.merge_circuit(qckt_1)
-    qc_combine.merge_circuit(qckt_2) 
-    return qc_combine
+    state = MCMCState(bit_init, accepted=True)
+    chain = MCMCChain([state], name="Batch")
+    energy = model.get_energy(state.bitstring)
 
-def run_qmcmc_quantum_ckt(
-    state_s: str,
-    model: IsingEnergyFunction,
-    mixer: CustomMixer,
-    gammafunc: callable,
-    alpha: float,
-    num_spins: int,
-    delta_time: float,
-):
-
-    h = model.circuit_h
-    J = model.circuit_J
-
-    gamma = gammafunc()
-
-    time = np.random.choice(list(range(2, 12)))
-
-    num_trotter_steps = int(np.floor((time / delta_time)))
-
-    qc_for_mcmc = initialise_qc(n_spins=num_spins, bitstring=state_s)
-    qc_problem_half = fn_qckt_problem_half(
-        J=J,
-        h=h,
-        num_spins=num_spins,
-        gamma=gamma,
-        alpha=alpha,
-        delta_time=delta_time,
-    )
-    possible_qubit_combinations = [(i, i+1) for i in range(num_spins - 1)]
-
-    mixer = CustomMixer(num_spins, possible_qubit_combinations)
-
-    qc_mixer = mixer.get_mixer_circuit(gamma=gamma, delta_time=delta_time)
-    qc_time_evol = trotter(
-        num_spins=num_spins,
-        qckt_1=qc_problem_half,
-        qckt_2=qc_mixer,
-        num_trotter_steps=num_trotter_steps,
-    )
-    qc_for_mcmc.merge_circuit(qc_time_evol)
-
-    q_state = QuantumState(qubit_count=num_spins)
-    q_state.set_zero_state()
-    qc_for_mcmc.update_quantum_state(q_state)
-    state_obtained = q_state.sampling(sampling_count=1)[0]
-    state_obtained_binary = f"{state_obtained:0{num_spins}b}"
-
-    return state_obtained_binary
-
-
-def quantum_enhanced_mcmc(
-    n_hops: int,
-    model: IsingEnergyFunction,
-    mixer: CustomMixer,
-    gamma: GammaType,
-    initial_state: Optional[str] = None,
-    temperature: float = 1,
-    delta_time=0.8,
-    verbose: bool = False,
-    name: str = "Q-MCMC",
-):
-    """
-    ARGS:
-    ----
-    Nhops: Number of time you want to run mcmc
-    model: The model to be sampled from
-    mixer: Mixer
-    RETURNS:
-    -------
-    Last 'return_last_n_states' elements of states so collected (default value=500). one can then deduce the distribution from it!
-    """
-
-    num_spins = model.num_spins
-
-    if isinstance(gamma, float) or isinstance(gamma, int):
-        gammafunc = lambda: gamma
-    else:
-        gammafunc = lambda: np.random.uniform(*gamma)
-
-    if initial_state is None:
-        initial_state = MCMCState(get_random_state(num_spins), accepted=True)
-    else:
-        initial_state = MCMCState(initial_state, accepted=True)
-    current_state: MCMCState = initial_state
-
-    energy_s = model.get_energy(current_state.bitstring)
-
-    if verbose:
-        print("starting with: ", current_state.bitstring, "with energy:", energy_s)
-
-    mcmc_chain = MCMCChain([current_state], name=name + ": " + str(mixer))
-
-    for _ in tqdm(
-        range(0, n_hops), desc="runnning quantum MCMC steps . ..", disable=not verbose
-    ):
-
-        s_prime = run_qmcmc_quantum_ckt(
-            state_s=current_state.bitstring,
-            model=model,
-            mixer=mixer,
-            gammafunc=gammafunc,
-            alpha=model.alpha,
-            num_spins=num_spins,
-            delta_time=delta_time,
-        )
-        if len(s_prime) == model.num_spins:
-            # accept/reject s_prime
-            energy_sprime = model.get_energy(s_prime)
-
-            accepted = test_accept(energy_s, energy_sprime, temperature=temperature)
-            mcmc_chain.add_state(MCMCState(s_prime, accepted))
-            if accepted:
-                current_state = mcmc_chain.current_state
-                energy_s = model.get_energy(current_state.bitstring)
-
+    for _ in range(n_hops):
+        gamma_val = gammafunc()
+        qc = initialise_qc(num_spins, state.bitstring)
+        qc.merge_circuit(trotter(
+            num_spins,
+            fn_qckt_problem_half(Jsub, hsub, num_spins, gamma_val, model.alpha, delta_time),
+            mixer.get_mixer_circuit(gamma_val, delta_time),
+            int(np.floor(np.random.randint(2, 12) / delta_time))
+        ))
+        qst = QuantumState(num_spins)
+        qst.set_zero_state()
+        qc.update_quantum_state(qst)
+        s_prime = f"{qst.sampling(1)[0]:0{num_spins}b}"
+        energy_prime = model.get_energy(s_prime)
+        if test_accept(energy, energy_prime, temperature):
+            state = MCMCState(s_prime, True)
+            energy = energy_prime
         else:
-            pass
+            state = MCMCState(s_prime, False)
+        chain.add_state(state)
+    return Counter([s.bitstring for s in chain.states if s.accepted])
 
-    return mcmc_chain
+def make_batches(n_nodes: int, batch_size: int, overlap: int):
+    return [list(range(i, min(i + batch_size, n_nodes))) for i in range(0, n_nodes, batch_size - overlap)]
 
-def get_probability_distribution(chain: MCMCChain, only_accepted=True):
-    bitstrings = [state.bitstring for state in chain.states if not only_accepted or state.accepted]
-    counts = Counter(bitstrings)
-    total = sum(counts.values())
-    return {bit: count / total for bit, count in counts.items()}
+def make_physics_J_h(num_nodes: int, avg_degree: int = 3, source_fraction: float = 0.05, load_fraction: float = 0.1, seed: int = 42):
+    rng = np.random.default_rng(seed)
+    J = np.zeros((num_nodes, num_nodes))
+    for j in range(num_nodes):
+        neighbors = rng.choice(num_nodes, avg_degree, replace=False)
+        for k in neighbors:
+            if k != j:
+                val = rng.uniform(0.1, 1.0) * (1 if rng.random() < 0.7 else -1)
+                J[j, k] = J[k, j] = val
+    np.fill_diagonal(J, 0)
+    h = np.zeros(num_nodes)
+    src = rng.choice(num_nodes, int(num_nodes * source_fraction), replace=False)
+    load = rng.choice([i for i in range(num_nodes) if i not in src], int(num_nodes * load_fraction), replace=False)
+    h[src] = rng.uniform(0.5, 2.0, len(src))
+    h[load] = -rng.uniform(0.5, 2.0, len(load))
+    return J, h
 
-num_spins = 50
-n_hops = 1000
-temperature = 1
-gamma_range = (0.2, 0.6)
-delta_time = 0.8
+def fault_localization_optimized():
+    NODES = 200
+    BATCH_SIZE = 12
+    OVERLAP = 4
+    N_HOPS = 200
 
-J = np.random.uniform(0, 1, size=(num_spins, num_spins))
-J = 0.5 * (J + J.T)
-np.fill_diagonal(J, 0)
-J = np.round(J, 2)
-h = np.round(np.random.uniform(-1.5, 1.5, size=num_spins), 2)
+    J, h = make_physics_J_h(NODES)
+    batches = make_batches(NODES, BATCH_SIZE, OVERLAP)
+    vote_counts, vote_totals = defaultdict(int), defaultdict(int)
+    rng = np.random.default_rng(123)
 
-model = IsingEnergyFunction(J, h)
+    t0 = time.time()
+    for batch in tqdm(batches, desc="Batches"):
+        Jsub = J[np.ix_(batch, batch)]
+        hsub = h[batch]
+        init = "".join(rng.choice(['0', '1'], size=len(batch)))
+        counts = run_batch_qmcmc(init, Jsub, hsub, N_HOPS, (0.2, 0.6), 1.0, 0.8)
+        
+        for bs, count in counts.items():
+            for i, b in enumerate(bs):
+                node = batch[i]
+                vote_totals[node] += count
+                vote_counts[node] += count * (b == '1')
+                
+    elapsed = time.time() - t0
 
-mcmc_chain = quantum_enhanced_mcmc(
-    n_hops=n_hops,
-    model=model,
-    mixer=CustomMixer,
-    gamma=gamma_range,
-    initial_state='01010101100101010110010101011001010101100101010110',
-    temperature=temperature,
-    delta_time=delta_time,
-    verbose=True,
-)
+    fault_probs = {n: vote_counts[n] / vote_totals[n] for n in vote_totals}
+    ranked = sorted(fault_probs.items(), key=lambda x: -x[1])
 
-# Output final probability distribution
-distribution = get_probability_distribution(mcmc_chain, only_accepted=True)
-print("\nFinal probability distribution from Q-MCMC (accepted states only):")
-for bitstring, prob in sorted(distribution.items(), key=lambda x: -x[1]):
-    print(f"{bitstring}: {prob:.4f}")
+    print(f"\nFinished in {elapsed:.2f} seconds.\nTop 10 fault-candidate nodes and P(fault):")
+    for node, prob in ranked[:10]:
+        print(f"  Node {node:3d}: {prob:.3f}")
+
+    print("\nFull distribution of fault probabilities:")
+    for node, prob in sorted(fault_probs.items()):
+        print(f"Node {node:3d}: {prob:.3f}")
+
+if __name__ == '__main__':
+    fault_localization_optimized()
