@@ -1,5 +1,6 @@
 #author: keerthana srinivasan
-#date of completion: 
+#date of completion: 6/2/2025
+#description: this program uses the bifurcation method to detect instability on an electrical power system. 
 
 
 import numpy as np #matrix and numerical operations
