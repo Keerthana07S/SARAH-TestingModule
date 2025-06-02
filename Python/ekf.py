@@ -1,3 +1,7 @@
+#author: keerthana srinivasan
+#date of completion: 6/2/2025
+#description: using extended kalman filters, we can calculate the variance of the residual over time, which can be used to classify faults.
+
 import numpy as np #for numerical and matrix operations
 import matplotlib.pyplot as plt
 from scipy.stats import normaltest #calculate variance of the residual
