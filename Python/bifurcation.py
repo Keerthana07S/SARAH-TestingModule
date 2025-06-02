@@ -1,21 +1,29 @@
-import numpy as np
+#author: keerthana srinivasan
+#date of completion: 
 
-L_eq = 5
-R_eq = 45
-V_ref = 12
-v_bus = 12.0
-i_s = 2.0
-C = 238
-P = 5.8
-R = 106
-delta_t = 1.0
 
+import numpy as np #matrix and numerical operations
+
+#note: the following givens can change depending on the electrical power subsystem
+L_eq = 5 #equivalent inductance
+R_eq = 45 #equivalent resistance
+V_ref = 12 #reference voltage
+v_bus = 12.0 #bus voltage
+i_s = 2.0 #bus current
+C = 238 #capacitance
+P = 5.8 #power
+R = 106 #overall resistance
+delta_t = 1.0 #change in time
+
+#change in bus current over time (derivative)
 def f(i_s, v_bus, L_eq, V_ref, R_eq):
     return (1 / L_eq) * (V_ref - v_bus - (R_eq * i_s))
 
+#change in bus voltage over time (derivative)
 def g(i_s, v_bus, C, R, P):
     return (1 / C) * (i_s - (v_bus / R) - (P / v_bus))
 
+#runge kutta for numerical integration over time steps. 
 def runge_kutta(i_s, v_bus, L_eq, V_ref, R_eq, C, R, P):
     ki_is = f(i_s, v_bus, L_eq, V_ref, R_eq)
     ki_vs = g(i_s, v_bus, C, R, P)
@@ -34,6 +42,7 @@ def runge_kutta(i_s, v_bus, L_eq, V_ref, R_eq, C, R, P):
     
     return i_s, v_bus
 
+#using the bifurcation method for detecting if instability in electrical power subsystem is present
 def fault_jacobian(v_bus, L_eq, R_eq, C, R, P):
     J = np.array([
         [(-R_eq / L_eq), (-1 / L_eq)],
@@ -57,6 +66,7 @@ def fault_jacobian(v_bus, L_eq, R_eq, C, R, P):
     
     print("System Stability:", stability)
 
-
+#bus current and voltage (from runge kutta)
 i_s, v_bus = runge_kutta(i_s, v_bus, L_eq, V_ref, R_eq, C, R, P)
+#stability status
 fault_jacobian(v_bus, L_eq, R_eq, C, R, P)
