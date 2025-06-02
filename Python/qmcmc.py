@@ -1,7 +1,8 @@
 # Some of this code was  referenced from pafloxy and Dr. David Layden's research, but modified to fit the needs of this project. MIT License is attached separately.
 # Moreover, many additions and modifications to the prior code were made so that up to 200 nodes can be searched using a classical computer.
 # Note that the library "quMCMC" was obtained from pafloxy's Github and should be in a separate folder when running this code. 
-import numpy as np
+
+import numpy as np #for numerical and matrix operations
 from typing import Optional, Union
 from collections import Counter, defaultdict
 from tqdm import tqdm
