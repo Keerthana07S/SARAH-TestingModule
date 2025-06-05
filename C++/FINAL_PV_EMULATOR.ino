@@ -1,5 +1,6 @@
 //author: keerthana srinivasan
 //date of completion: 6/1/2025
+//description: emulator that demonstrates classive photovoltaic characteristics through IV curve generation. 
 
 const int voltagePin = A0;  //voltage output (V-out) from voltage divider
 const int currentPin = A1;  //current output (I-loss)
