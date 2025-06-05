@@ -1,5 +1,5 @@
 #author: keerthana srinivasan
-#date of completion: 6/3/2025
+#date of completion: 4/18/2025
 #description: this code computes the covariance between system derivatives and each parameter in an electrical model using runge-kutta integration
 
 
