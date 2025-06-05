@@ -1,8 +1,14 @@
-using DataTables
-include("bifurcation.jl")
-using Pkg
-using DataFrames, Statistics
+#author: keerthana srinivasan
+#date of completion: 6/3/2025
+#description: this code computes the covariance between system derivatives and each parameter in an electrical model using runge-kutta integration
 
+
+using DataTables #for organizing data
+include("bifurcation.jl") #for earlier bifurcation
+using Pkg #install new libraries
+using DataFrames, Statistics #analyze covariance
+
+#fixed constants for the system
 L_eq = 5
 R_eq = 5
 V_ref = 12
@@ -14,7 +20,7 @@ R = 106
 delta_t = 1.0
 stability = true
 
-
+#vary r_eq from 0.1 to 10.0 and compute covariance with system derivatives
 function compute_r_eq()
     r_eq = 0.1:0.1:10
     l_eq = 5
@@ -46,6 +52,7 @@ function compute_r_eq()
     println("Covariance btwn is and req: ", cov_i)
 end
 
+#vary l_eq from 1 to 10 and compute covariance with system derivatives
 function compute_l_eq()
     l_eq = 1:0.1:10
     r_eq = 5
@@ -77,6 +84,7 @@ function compute_l_eq()
     println("Covariance btwn is and leq: ", cov_i)
 end
 
+#vary v_ref from 1 to 12 and compute covariance with system derivatives
 function compute_v_ref()
     v_ref = 1:0.1:12
     r_eq = 5
@@ -108,6 +116,7 @@ function compute_v_ref()
     println("Covariance btwn is and vref: ", cov_i)
 end
 
+#vary v_bus from 1 to 12 and compute covariance with system derivatives
 function compute_bus_voltage()
     v_bus = 1:0.1:12
     r_eq = 5
@@ -139,6 +148,7 @@ function compute_bus_voltage()
     println("Covariance btwn is and busv: ", cov_i)
 end
 
+#vary i_s from 0 to 5 and compute covariance with system derivatives
 function compute_current()
     i_s = 0:0.1:5
     r_eq = 5
@@ -170,6 +180,7 @@ function compute_current()
     println("Covariance btwn is and curr: ", cov_i)
 end
 
+#vary capacitance from 1 to 1000 and compute covariance with system derivatives
 function compute_capacitance()
     i_s = 2
     r_eq = 5
@@ -201,6 +212,7 @@ function compute_capacitance()
     println("Covariance btwn is and cap: ", cov_i)
 end
 
+#vary power from 1 to 10 and compute covariance with system derivatives
 function compute_power()
     i_s = 2
     r_eq = 5
@@ -232,6 +244,7 @@ function compute_power()
     println("Covariance btwn is and pow: ", cov_i)
 end
 
+#vary resistance from 10 to 200 and compute covariance with system derivatives
 function compute_resistance()
     i_s = 2
     r_eq = 5
@@ -263,6 +276,7 @@ function compute_resistance()
     println("Covariance btwn is and res: ", cov_i)
 end
 
+#run all computations sequentially
 compute_r_eq()
 compute_l_eq()
 compute_v_ref()
