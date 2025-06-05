@@ -1,7 +1,13 @@
-import pandas as pd
-import numpy as np
-import snowflake.connector
+#author: keerthana srinivasan
+#date of completion: 5/12/2025
+#description: using this code, we can simulate 50 more nodes using snowflake to further prove SARAH's effectiveness in widespread fault localization
 
+import pandas as pd #data organization
+import numpy as np #numerical operations
+import snowflake.connector #connect to snowflake
+
+
+#connect to your snowflake account
 conn = snowflake.connector.connect(
     user="your_username",
     password="your_password",
@@ -14,6 +20,7 @@ conn = snowflake.connector.connect(
 
 cursor = conn.cursor()
 
+#create 50 extra nodes and their characteristics
 def simulate_50_nodes():
     data = []
 
@@ -44,6 +51,7 @@ def simulate_50_nodes():
 
     return pd.DataFrame(data)
 
+#create a dataframe of the 50 nodes
 def upload_to_snowflake(df, table_name="VIRTUAL_NODES"):
     cursor.execute(f"""
         CREATE OR REPLACE TABLE {table_name} (
@@ -60,6 +68,7 @@ def upload_to_snowflake(df, table_name="VIRTUAL_NODES"):
             VALUES (%s, %s, %s, %s)
         """, (row["NodeID"], row["Isc_mA"], row["Radiation_G_W_per_m2"], row["Fault_Type"]))
 
+#upload 50 nodes to snowflake
 if __name__ == "__main__":
     df_nodes = simulate_50_nodes()
     print("Simulated Node Data:\n", df_nodes.head())
