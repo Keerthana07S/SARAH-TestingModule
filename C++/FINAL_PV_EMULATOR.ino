@@ -4,7 +4,13 @@
 
 const int voltagePin = A0;  //voltage output (V-out) from voltage divider
 const int currentPin = A1;  //current output (I-loss)
-const float vcc = 5.0; //vcc
+
+const int thermistorPin = 2; //input for thermistor data
+const int RT0 = 10000;
+const int B = 3977;
+const float temp_main = 25 + 273.15;
+
+const float vcc = 3.3; //vcc
 const int adcMax = 1023; //for voltage sensor processing
 const float sens = 0.185;  //noice 
 
@@ -13,6 +19,20 @@ const float I_ph = 0.683;
 const float I_0 = 1e-10;      
 const float n = 1.3;            
 const float T = 298.15;  //in the event a thermistor is available, the function to obtain temperature  could also be applicable  
+
+float obtainTemperature() {
+  float T_measurement = (3.30 / 1023.00) * analogRead(thermistorPin);
+  float T_voltage = 3.3 - T_measurement;
+  float T_resistance = T_measurement / (T_voltage / 1000);
+
+  ln = log(T_resistance/RT0);
+  temp_x = (1 / ((ln / B) + (1 / temp_main)))
+  temp_x = temp_x - 273.15;
+
+  return temp_x;
+}
+
+
 const float q = 1.602e-19;       
 const float k = 1.38064852e-23; 
 const float R_s = 0.5;        
@@ -53,6 +73,7 @@ void setup() {
 void loop() {
   float V = readVoltage();   //current voltage
   float I_loss = readCurrent();  //i-loss 
+  float temperature = obtainTemperature(); //surrounding temperature
   
   float diodeTerm = I_0 * (exp((q * (V + I_loss * R_s)) / (n * k * T)) - 1); //i_ds
   float shuntTerm = (V + I_loss * R_s) / R_sh; //i_sh
@@ -69,6 +90,8 @@ void loop() {
   Serial.print("Output Current (A): ");
   Serial.println(I_output, 3);
   Serial.println("-----");
+  Serial.print("Temperature (Celcius): ");
+  Serial.println(temperature);
 
   delay(1000);
 }
